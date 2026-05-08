@@ -287,146 +287,7 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
 /* ══════════════════════════════════════════════════
    DELETE FUNCTIONALITY
 ══════════════════════════════════════════════════ */
-let _delCb = null; // callback when confirmed
 
-function openDelDialog(title, body, cb) {
-  document.getElementById('delTitle').textContent = title;
-  document.getElementById('delBody').innerHTML = body;
-  document.getElementById('delDialog').classList.add('open');
-  _delCb = cb;
-}
-function closeDelDialog() {
-  document.getElementById('delDialog').classList.remove('open');
-  _delCb = null;
-}
-function confirmDelete() {
-  closeDelDialog();
-  if (_delCb) _delCb();
-}
-
-/* Delete entire year */
-function promptDeleteYear() {
-  if (!S.isAdmin) { toast('Admin access required', 'e'); return; }
-  if (!S.year) { toast('No year selected', 'e'); return; }
-  const mo = moDetect(S.db[S.year] || {});
-  openDelDialog(
-    `Delete Year ${S.year}?`,
-    `This will permanently remove <strong>all ${mo.length} months</strong> of data for <strong>${S.year}</strong> from the dashboard and the cloud.<br><br>This cannot be undone.`,
-    async () => {
-      await deleteYear(S.year);
-    }
-  );
-}
-
-async function deleteYear(yr) {
-  // Remove from cloud
-  const f = fb();
-  if (f) {
-    try { await f.set(f.ref(f.db, `bpc_toms/data/${yr}`), null); }
-    catch(e) { console.warn('Cloud delete failed:', e.message); }
-  }
-  // Log it
-  await logChange('delete', `Deleted entire year ${yr} (${moDetect(S.db[yr]||{}).length} months of data)`);
-  // Remove locally
-  delete S.db[yr];
-  localSave();
-  // Reset year selector
-  const yrs = Object.keys(S.db).sort().reverse();
-  S.year = yrs[0] || null;
-  rebuildUI();
-  if (S.year) {
-    document.getElementById('yrSel').value = S.year;
-    setYear(S.year);
-  } else {
-    document.getElementById('dash').style.display = 'none';
-    document.getElementById('emptyState').style.display = '';
-    document.getElementById('emptyYr').textContent = '';
-  }
-  toast(`Year ${yr} deleted successfully`, 'ok');
-}
-
-/* Delete individual month */
-function promptDeleteMonth(mo) {
-  if (!S.isAdmin) return;
-  const moName = MOF[mo];
-  openDelDialog(
-    `Delete ${moName} ${S.year}?`,
-    `This will permanently remove <strong>${moName} ${S.year}</strong> data from all 6 sheets (line losses, bus losses, MSL, transformer, feeder, energy).<br><br>This cannot be undone.`,
-    async () => {
-      await deleteMonth(S.year, mo);
-    }
-  );
-}
-
-async function deleteMonth(yr, mo) {
-  if (!S.db[yr]) return;
-  // Set all values for this month to null across all sheets
-  let changed = false;
-  for (const sheet of Object.values(S.db[yr])) {
-    if (!Array.isArray(sheet)) continue;
-    for (const row of sheet) {
-      if (row.months && row.months[mo] !== null) {
-        row.months[mo] = null; changed = true;
-      }
-      if (row.maxMW && row.maxMW[mo] !== null) {
-        row.maxMW[mo] = null; row.minMW[mo] = null; changed = true;
-      }
-    }
-  }
-  if (!changed) { toast('No data found for this month', ''); return; }
-
-  localSave();
-  // Save to cloud
-  const f = fb();
-  if (f) {
-    try { await f.set(f.ref(f.db, `bpc_toms/data/${yr}`), JSON.stringify(S.db[yr])); }
-    catch(e) { console.warn('Cloud update failed:', e.message); }
-  }
-  await logChange('delete', `Deleted ${MOF[mo]} ${yr} data from all sheets`);
-
-  // Rebuild month chips and re-render
-  const avail = moDetect(S.db[yr]);
-  S.months = S.months.filter(m => avail.includes(m));
-  if (!S.months.length && avail.length) S.months = [avail[avail.length-1]];
-  buildMChips(avail);
-  buildYcards();
-  renderAll();
-  toast(`${MOF[mo]} ${yr} data deleted`, 'ok');
-}
-
-/* Show/hide delete controls based on admin state */
-function updateDeleteControls() {
-  const show = S.isAdmin;
-  const delYearBtn = document.getElementById('delYearBtn');
-  if (delYearBtn) delYearBtn.classList.toggle('adm-show', show);
-  document.querySelectorAll('.mc-del').forEach(btn => btn.classList.toggle('adm-show', show));
-}
-
-/* ══ TOAST ══ */
-#toast { position:fixed; bottom:24px; right:24px; z-index:9999; background:var(--n1); color:#fff; padding:12px 18px; border-radius:var(--r2); font-size:12.5px; font-weight:500; max-width:370px; box-shadow:var(--sh2); transform:translateY(16px) scale(.97); opacity:0; transition:all .28s cubic-bezier(.175,.885,.32,1.275); pointer-events:none; border-left:5px solid var(--gold); }
-#toast.show { transform:translateY(0) scale(1); opacity:1; }
-#toast.te { border-left-color:var(--red); } #toast.tok { border-left-color:var(--ok); }
-
-.t3i { border-radius:10px; padding:13px 16px; margin-bottom:9px; display:flex; align-items:center; justify-content:space-between; }
-.t3n { font-family:var(--fh); font-size:12.5px; font-weight:700; color:var(--n1); }
-.t3s { font-size:10.5px; color:var(--muted); margin-top:3px; }
-.t3v { font-family:var(--fm); font-size:19px; font-weight:700; }
-.fsubbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
-.empty-s { text-align:center; padding:60px 20px; color:var(--muted); }
-.empty-s .ei { font-size:54px; margin-bottom:14px; display:block; }
-.empty-s h3 { font-family:var(--fh); font-size:20px; font-weight:700; color:var(--n1); margin-bottom:8px; }
-
-.footer { background:var(--n0); color:rgba(255,255,255,.3); text-align:center; padding:18px 24px; font-size:10.5px; font-family:var(--fm); border-top:1px solid rgba(255,255,255,.05); }
-.footer strong { color:var(--gold2); }
-
-/* ══ RESPONSIVE ══ */
-@media(max-width:1100px){.hero-right{display:none}.hero-h{font-size:32px}}
-@media(max-width:900px){.g2,.g65{grid-template-columns:1fr}.kg{grid-template-columns:repeat(2,1fr)}.hdr-w{height:auto;padding:10px 14px;flex-wrap:wrap;gap:8px}.main{padding:12px 12px 50px}}
-@media(max-width:600px){.kg{grid-template-columns:1fr 1fr}.yr-zone .yr-lbl{display:none}}
-@media print{.hdr,.mbar,.tbar,#toast,.login-ov,.ro-bar,.setup,.data-entry-panel{display:none!important}.panel{display:block!important}.card{box-shadow:none!important;border:1px solid #ddd;page-break-inside:avoid}}
-
-
-/* ══ DELETE CONTROLS ══ */
 .del-year-btn {
   display:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:600;
   cursor:pointer; border:1.5px solid #fca5a5; background:#fee2e2; color:#991b1b;
@@ -492,8 +353,8 @@ function updateDeleteControls() {
     <h3 id="mt">Confirm Merge</h3><p id="mb"></p>
     <div class="mdiff" id="md" style="display:none"></div>
     <div class="macts">
-      <button class="mcancel" onclick="closeModal(false)">Keep Existing</button>
-      <button class="mok" onclick="closeModal(true)">Overwrite &amp; Merge</button>
+      <button class="mcancel" onclick="closeModal(false)">Keep Existing (add new months only)</button>
+      <button class="mok" onclick="closeModal(true)">Overwrite All (replace everything)</button>
     </div>
   </div>
 </div>
@@ -1100,13 +961,28 @@ function parseXL(buf,fname){
 function closeModal(ok){document.getElementById('modal').classList.remove('open');document.getElementById('md').style.display='none';if(S.mcb){S.mcb(ok);S.mcb=null;}}
 function doMerge(yr,fresh,ow){
   if(!S.db[yr]){S.db[yr]=fresh;return;}
+  if(ow){
+    // Overwrite: fully replace all sheets with fresh data including cleared cells
+    for(const k of Object.keys(fresh)) S.db[yr][k]=fresh[k];
+    for(const k of Object.keys(S.db[yr])){if(!(k in fresh))delete S.db[yr][k];}
+    return;
+  }
+  // Keep existing: only fill in missing months
   for(const k of Object.keys(fresh)){
     if(!S.db[yr][k]){S.db[yr][k]=fresh[k];continue;}
     const ex=S.db[yr][k],inc=fresh[k];
     for(const nr of inc){
       const mr=ex.find(r=>(r.name||'')===(nr.name||'')&&(r.voltage||'')===(nr.voltage||'')&&(r.transformer||'')===(nr.transformer||'')&&(r.type||'')===(nr.type||''));
       if(!mr){ex.push(nr);continue;}
-      for(let m=0;m<12;m++){const nv=(nr.months||nr.maxMW||[])[m];if(nv!==null&&nv!==undefined&&!isNaN(nv)){if(ow||(mr.months||[])[m]===null||(mr.months||[])[m]===undefined){if(mr.months)mr.months[m]=nv;if(mr.maxMW&&nr.maxMW){mr.maxMW[m]=nr.maxMW[m];mr.minMW[m]=nr.minMW[m];}}}}
+      for(let m=0;m<12;m++){
+        const nv=(nr.months||nr.maxMW||[])[m];
+        if(nv!==null&&nv!==undefined&&!isNaN(nv)){
+          if((mr.months||[])[m]===null||(mr.months||[])[m]===undefined){
+            if(mr.months)mr.months[m]=nv;
+            if(mr.maxMW&&nr.maxMW){mr.maxMW[m]=nr.maxMW[m];if(mr.minMW&&nr.minMW)mr.minMW[m]=nr.minMW[m];}
+          }
+        }
+      }
     }
   }
 }
@@ -1154,7 +1030,41 @@ function pLine(wb){const ws=wb.Sheets['Line losses'];if(!ws)return[];const rows=
 function pBus(wb){const ws=wb.Sheets['bus loss'];if(!ws)return[];const rows=[];let sub='';for(let r=3;r<=36;r++){const sn=cs(ws,r,1);if(sn&&SUBS.some(s=>sn.toLowerCase().includes(s.toLowerCase())))sub=sn;const vt=cs(ws,r,2);if(!vt)continue;rows.push({name:sub||sn,voltage:vt,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
 function pMSL(wb){const ws=wb.Sheets['MSL'];if(!ws)return[];const rows=[];const sm={A:'Olakha',B:'Paro',C:'Jemina',D:'Dechencholing',E:'Haa',F:'Semtokha',G:'Pangbesa',H:'Changidaphu',I:'Dochula',J:'Jamjee'};for(let r=5;r<=20;r++){const raw=cs(ws,r,0);if(!raw)continue;const sub=SUBS.find(s=>raw.includes(s))||(raw.match(/\(([A-J])\)/)?sm[raw.match(/\(([A-J])\)/)[1]]:'');if(!sub)continue;rows.push({name:sub,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
 function pTX(wb){const ws=wb.Sheets['Transformer loss'];if(!ws)return[];const rows=[];let sub='';for(let r=5;r<=50;r++){const sn=cs(ws,r,0);if(sn&&SUBS.some(s=>sn.includes(s)))sub=sn;const tx=cs(ws,r,2);if(!tx)continue;rows.push({name:sub||sn,voltage:cs(ws,r,1),transformer:tx,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
-function pFWPL(wb){const ws=wb.Sheets['FWPL'];if(!ws)return[];const rows=[];let sub='';for(let r=5;r<=185;r++){const c0=ws[XLSX.utils.encode_cell({r,c:0})]?.v;const nm=cs(ws,r,1);if(typeof c0==='string'&&(c0.includes('Substation')||c0.match(/\([A-Z]\)/))){sub=c0;continue;}if(!nm||typeof c0!=='number')continue;rows.push({name:nm,substation:sub,maxMW:Array.from({length:12},(_,m)=>cv(ws,r,2+m*2)),minMW:Array.from({length:12},(_,m)=>cv(ws,r,3+m*2)),months:Array.from({length:12},(_,m)=>cv(ws,r,2+m*2))});}return rows;}
+function pFWPL(wb){
+  const ws=wb.Sheets['FWPL'];if(!ws)return[];
+  const rows=[];let sub='';
+  const SM={
+    'olakha':'Olakha','paro':'Paro','jemina':'Jemina',
+    'dchling':'Dechencholing','dechencholing':'Dechencholing',
+    'haa':'Haa','semtokha':'Semtokha',
+    'pangbesa':'Pangbesa','pangbasa':'Pangbesa',
+    'changedaphu':'Changidaphu','changidaphu':'Changidaphu',
+    'dochula':'Dochula','jamjee':'Jamjee'
+  };
+  function cleanSub(raw){
+    if(!raw)return '';
+    const lo=raw.toLowerCase();
+    for(const k in SM){if(lo.includes(k))return SM[k];}
+    return raw.replace(/\([A-Za-z]\)\s*/,'')
+              .replace(/\d+\/\d+[\/\d]*\s*kV\s*/gi,'')
+              .replace(/substation/gi,'').replace(/\s+/g,' ').trim();
+  }
+  for(let r=5;r<=185;r++){
+    const c0=ws[XLSX.utils.encode_cell({r,c:0})]?.v;
+    const nm=cs(ws,r,1);
+    if(typeof c0==='string'&&c0.match(/\([A-Za-z]\)/)){
+      sub=cleanSub(c0);continue;
+    }
+    if(!nm||typeof c0!=='number')continue;
+    rows.push({
+      name:nm,substation:sub,
+      maxMW:Array.from({length:12},(_,m)=>cv(ws,r,2+m*2)),
+      minMW:Array.from({length:12},(_,m)=>cv(ws,r,3+m*2)),
+      months:Array.from({length:12},(_,m)=>cv(ws,r,2+m*2))
+    });
+  }
+  return rows;
+}
 function pEnergy(wb){const ws=wb.Sheets['Total energy'];if(!ws)return[];const rows=[];let sub='';for(let r=3;r<=40;r++){const sn=cs(ws,r,1),tp=cs(ws,r,2);if(sn)sub=sn;if(!tp)continue;rows.push({name:sub,type:tp,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
 
 /* ══════════════════════════════════════════════════
@@ -1198,7 +1108,14 @@ function renderMSL(){const mi=MI(),rows=D('msl');const avgs=rows.map(r=>rAvg(r,m
 
 function renderTX(){const mi=MI(),rows=D('tx');const subs=[...new Set(rows.map(r=>r.name))];mkC('c-tx-b','bar',{labels:subs,datasets:[{label:'Avg TX Loss %',data:subs.map(s=>Math.abs(aAvg(rows.filter(r=>r.name===s),mi)||0)*100),backgroundColor:subs.map(s=>{const v=Math.abs(aAvg(rows.filter(r=>r.name===s),mi)||0)*100;return v>3?'#fecaca':v>1?'#fef9c3':'#bbf7d0';}),borderRadius:5}]},{plugins:{legend:{display:false}},scales:{x:XS(),y:YP()}});const r3=[...rows].map(r=>({...r,aa:Math.abs(rAvg(r,mi)||0)})).sort((a,b)=>b.aa-a.aa).slice(0,3);document.getElementById('tx3').innerHTML=r3.map((r,i)=>`<div class="t3i" style="background:${['#fee2e2','#fef3c7','#fefce8'][i]}"><div><div class="t3n">#${i+1} ${r.transformer}</div><div class="t3s">${r.name} · ${r.voltage}</div></div><div class="t3v" style="color:${i===0?'#991b1b':'#92400e'}">${(r.aa*100).toFixed(2)}%</div></div>`).join('')||'<div style="text-align:center;padding:26px;color:var(--muted)">No data</div>';let th=`<table class="dt"><thead><tr><th>Substation</th><th>Voltage</th><th>Transformer</th>`;mi.forEach(m=>th+=`<th>${MOS[m]}</th>`);th+=`<th>Average</th><th>Status</th></tr></thead><tbody>`;for(const r of rows){const avg=rAvg(r,mi),ab=Math.abs(avg||0)*100;th+=`<tr><td class="tdn">${r.name}</td><td>${r.voltage}</td><td>${r.transformer}</td>${mi.map(m=>{const v=r.months?.[m];return`<td style="background:${hbg(v)};color:${hfg(v)}">${v!==null?fp(v):'—'}</td>`;}).join('')}<td style="background:${hbg(avg)};color:${hfg(avg)};font-weight:700">${fp(avg)}</td><td><span class="badge ${ab>5?'bdanger':ab>3?'bwarn':'bok'}">${ab>5?'Critical':ab>3?'High':'Normal'}</span></td></tr>`;}th+=`</tbody></table>`;mkTable('txt',th);buildIns(rows,mi,'i-tx');}
 
-function buildFSubChips(){const rows=D('fwpl');const subs=[...new Set(rows.map(r=>r.substation).filter(Boolean))];if(!S.fsub&&subs.length)S.fsub=subs[0];document.getElementById('fsubs').innerHTML=subs.map(s=>{const lbl=s.replace(/\([A-Z]\)\s*/,'').replace(/\d+\/\d+.*Substation/i,'').trim().slice(0,22)||s.slice(0,22);return`<button class="mc${S.fsub===s?' mc-on':''}" onclick="setFSub('${s}')">${lbl}</button>`;}).join('');}
+function buildFSubChips(){
+  const rows=D('fwpl');
+  const subs=[...new Set(rows.map(r=>r.substation).filter(Boolean))];
+  if(!S.fsub&&subs.length)S.fsub=subs[0];
+  document.getElementById('fsubs').innerHTML=subs.map(s=>{
+    return `<button class="mc${S.fsub===s?' mc-on':''}" onclick="setFSub('${s}')">${s}</button>`;
+  }).join('');
+}
 function setFSub(s){S.fsub=s;buildFSubChips();renderFW();}
 function renderFW(){const mi=MI(),all=D('fwpl');const rows=S.fsub?all.filter(r=>r.substation===S.fsub):all.slice(0,20);if(!rows.length)return;mkC('c-fw-p','bar',{labels:rows.map(r=>r.name.length>20?r.name.slice(0,20)+'…':r.name),datasets:[{label:'Peak MW',data:rows.map(r=>Math.max(...mi.map(m=>r.maxMW?.[m]||0).filter(v=>v>0))||0),backgroundColor:'#1a7a3ebb',borderRadius:4}]},{plugins:{legend:{display:false}},scales:{x:XS(),y:YMW()}});const top4=rows.slice(0,4);mkC('c-fw-mm','line',{labels:mi.map(i=>MOS[i]),datasets:top4.flatMap((r,i)=>[{label:`${r.name.slice(0,14)} Max`,data:mi.map(m=>r.maxMW?.[m]||null),borderColor:PAL[i],backgroundColor:'transparent',borderWidth:2,tension:.3,spanGaps:true,pointRadius:3},{label:`${r.name.slice(0,14)} Min`,data:mi.map(m=>r.minMW?.[m]||null),borderColor:PAL[i],backgroundColor:'transparent',borderWidth:1,borderDash:[5,3],tension:.3,spanGaps:true,pointRadius:2}])},{plugins:{legend:{labels:{font:{family:'DM Sans',size:8},boxWidth:8}}},scales:{x:XS(),y:YMW()}});let th=`<table class="dt"><thead><tr><th>Feeder</th>`;mi.forEach(m=>th+=`<th>${MOS[m]} Max</th><th style="color:rgba(255,255,255,.45)">Min</th>`);th+=`<th>Annual Peak</th></tr></thead><tbody>`;for(const r of rows){const pk=Math.max(...mi.map(m=>r.maxMW?.[m]||0));th+=`<tr><td class="tdn" style="font-size:11.5px">${r.name}</td>${mi.map(m=>`<td>${(r.maxMW?.[m]||0).toFixed(2)}</td><td style="color:var(--muted)">${(r.minMW?.[m]||0).toFixed(2)}</td>`).join('')}<td style="font-weight:700;color:var(--n1)">${isFinite(pk)&&pk>0?pk.toFixed(2)+' MW':'—'}</td></tr>`;}th+=`</tbody></table>`;mkTable('fwt',th);const fi=document.getElementById('i-fw');if(fi)fi.innerHTML=rows.slice(0,6).map(r=>{const pk=Math.max(...mi.map(m=>r.maxMW?.[m]||0));return isFinite(pk)&&pk>0?`<div class="ins">${r.name}: Peak ${pk.toFixed(2)} MW</div>`:null;}).filter(Boolean).join('')||'<div class="ins">No feeder data.</div>';}
 
