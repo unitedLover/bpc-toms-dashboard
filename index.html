@@ -350,11 +350,11 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
 <!-- MERGE MODAL -->
 <div class="mbg" id="modal">
   <div class="mbox">
-    <h3 id="mt" style="color:var(--n1);font-family:var(--fh);font-size:18px;margin-bottom:10px">Changes Detected</h3><div id="mb"></div>
+    <h3 id="mt">Confirm Merge</h3><p id="mb"></p>
     <div class="mdiff" id="md" style="display:none"></div>
     <div class="macts">
-      <button class="mcancel" onclick="closeModal(false)" style="background:#f8f9fa;border:1.5px solid #dee2e6;color:#6c757d;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--fb);font-weight:500">❌ Cancel — do not apply changes</button>
-      <button class="mok" onclick="closeModal(true)" style="background:#1a7a3e;color:#fff;border:none;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--fb);font-weight:700">✓ Confirm — apply all changes</button>
+      <button class="mcancel" onclick="closeModal(false)" style="padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--fb);background:#f8f9fa;border:1.5px solid #dee2e6;color:#6c757d;font-weight:500">❌ Cancel</button>
+      <button class="mok" onclick="closeModal(true)" style="padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--fb);background:#1a7a3e;color:#fff;border:none;font-weight:700">✓ Confirm — apply all changes</button>
     </div>
   </div>
 </div>
@@ -977,45 +977,40 @@ function parseXL(buf,fname){
   try{
     const wb=XLSX.read(buf,{type:'array'});
     const yr=detectYear(wb);
-    if(!yr){toast('Cannot detect year — make sure year is in row 1 of each sheet','e');return;}
+    if(!yr){toast('Cannot detect year — make sure year is in row 1','e');return;}
     const fresh={line:pLine(wb),bus:pBus(wb),msl:pMSL(wb),tx:pTX(wb),fwpl:pFWPL(wb),energy:pEnergy(wb)};
     const nm=moDetect(fresh);
 
-    // If no existing data for this year — just load it directly
+    // No existing data for this year — load directly, no popup
     if(!S.db[yr]){
       S.db[yr]=fresh;
       finalize(yr,nm,fname);
       return;
     }
 
-    // ── Detect exactly what changed ──
+    // Detect exactly what changed
     const changes=[];
     const em=moDetect(S.db[yr]);
     const newMo=nm.filter(m=>!em.includes(m));
     const remMo=em.filter(m=>!nm.includes(m));
 
-    // Detect feeder changes in FWPL
     const oldFeeders=(S.db[yr].fwpl||[]).map(r=>r.name).sort().join('|');
     const newFeeders=(fresh.fwpl||[]).map(r=>r.name).sort().join('|');
     const feedersChanged=oldFeeders!==newFeeders;
-    const oldFCount=(S.db[yr].fwpl||[]).length;
-    const newFCount=(fresh.fwpl||[]).length;
+    const oldFC=(S.db[yr].fwpl||[]).length;
+    const newFC=(fresh.fwpl||[]).length;
 
-    // Detect line section changes
     const oldLines=(S.db[yr].line||[]).map(r=>r.name).sort().join('|');
     const newLines=(fresh.line||[]).map(r=>r.name).sort().join('|');
     const linesChanged=oldLines!==newLines;
 
-    // Detect transformer changes
     const oldTX=(S.db[yr].tx||[]).map(r=>r.transformer).sort().join('|');
     const newTX=(fresh.tx||[]).map(r=>r.transformer).sort().join('|');
     const txChanged=oldTX!==newTX;
 
-    // Detect value changes in overlapping months
     let valuesChanged=false;
     const ovMo=nm.filter(m=>em.includes(m));
     if(ovMo.length>0){
-      // Compare a sample of values
       ['line','bus','msl','tx','energy'].forEach(sheet=>{
         const ex=S.db[yr][sheet]||[];
         const inc=fresh[sheet]||[];
@@ -1031,33 +1026,28 @@ function parseXL(buf,fname){
       });
     }
 
-    // Build change summary
-    if(newMo.length>0) changes.push('➕ New months: <strong>'+newMo.map(m=>MOS[m]).join(', ')+'</strong>');
+    if(newMo.length>0) changes.push('➕ New months added: <strong>'+newMo.map(m=>MOS[m]).join(', ')+'</strong>');
     if(remMo.length>0) changes.push('❌ Months removed from Excel: <strong>'+remMo.map(m=>MOS[m]).join(', ')+'</strong>');
-    if(feedersChanged) changes.push('✏️ Feeder names changed <span style="color:var(--muted);font-size:10px">('+oldFCount+' → '+newFCount+' feeders)</span>');
+    if(feedersChanged) changes.push('✏️ Feeder names changed <span style="color:var(--muted);font-size:10.5px">('+oldFC+' → '+newFC+' feeders)</span>');
     if(linesChanged) changes.push('✏️ Line section names changed');
     if(txChanged) changes.push('✏️ Transformer names changed');
     if(valuesChanged) changes.push('✏️ Data values updated in existing months');
-    if(changes.length===0) changes.push('ℹ️ No changes detected');
+    if(changes.length===0) changes.push('ℹ️ No changes detected — data is identical');
 
-    // Show confirmation dialog with detected changes
-    document.getElementById('mt').textContent='Changes detected for '+yr;
+    // Show confirmation dialog
+    document.getElementById('mt').textContent='Changes Detected — '+yr;
     document.getElementById('mb').innerHTML=
-      '<div style="margin-bottom:10px;font-size:12px;color:var(--muted)">The following changes were found in your Excel file:</div>'+
-      '<ul style="margin:0 0 10px 0;padding:0 0 0 18px;font-size:12.5px;line-height:1.8">'+
+      '<div style="margin-bottom:10px;font-size:12px;color:var(--muted)">Your Excel file has the following changes:</div>'+
+      '<ul style="margin:0 0 12px 0;padding:0 0 0 18px;font-size:12.5px;line-height:2">'+
       changes.map(c=>'<li>'+c+'</li>').join('')+
-      '</ul>';
+      '</ul>'+
+      '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:11.5px;color:#14532d">'+
+      '✅ Click <strong>Confirm</strong> to apply all changes from your Excel file.</div>';
     document.getElementById('md').style.display='none';
     document.getElementById('modal').classList.add('open');
-    S.mcb=ok=>{
-      if(ok){
-        // Apply all changes from Excel
-        S.db[yr]=fresh;
-        finalize(yr,nm,fname);
-      }else{
-        toast('Upload cancelled','');
-        document.getElementById('modal').classList.remove('open');
-      }
+    S.mcb=function(ok){
+      if(ok){S.db[yr]=fresh;finalize(yr,nm,fname);}
+      else{toast('Upload cancelled','');}
     };
   }catch(err){
     console.error(err);
@@ -1067,11 +1057,7 @@ function parseXL(buf,fname){
 function closeModal(ok){
   document.getElementById('modal').classList.remove('open');
   document.getElementById('md').style.display='none';
-  if(S.mcb){
-    const cb=S.mcb;
-    S.mcb=null;
-    cb(ok);
-  }
+  if(S.mcb){const cb=S.mcb;S.mcb=null;cb(ok);}
 }}
 function doMerge(yr,fresh,ow){
   if(!S.db[yr]){S.db[yr]=fresh;return;}
