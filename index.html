@@ -542,13 +542,30 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
     <!-- LINE -->
     <div class="panel" id="p-ll">
       <div class="g2">
-        <div class="card"><div class="ctitle"><div class="cico">⚡</div>Transmission Line Loss Trends</div><div class="csub">Click legend to toggle lines</div><div class="ch ch-tall"><canvas id="c-ll-m"></canvas></div></div>
-        <div class="card"><div class="ctitle"><div class="cico">🏆</div>Top 5 Highest-Loss Lines</div><div class="ch"><canvas id="c-ll-5"></canvas></div></div>
+        <div class="card">
+          <div class="ctitle"><div class="cico">&#9889;</div>220kV Transmission Line Losses</div>
+          <div class="csub">Monthly loss % &mdash; 220kV line sections</div>
+          <div class="ch ch-tall"><canvas id="c-ll-220"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ctitle"><div class="cico">&#9889;</div>66kV Transmission Line Losses</div>
+          <div class="csub">Monthly loss % &mdash; 66kV line sections</div>
+          <div class="ch ch-tall"><canvas id="c-ll-66"></canvas></div>
+        </div>
       </div>
-      <div class="card"><div class="ctitle"><div class="cico">📋</div>Line Loss Detail <span style="font-size:10.5px;color:var(--muted);font-weight:400;margin-left:5px">Sort by clicking headers · amber = anomaly</span></div><div class="tscr" id="llt"></div></div>
-      <div class="ins-box"><div class="ins-hd">💡 Line Loss Insights</div><div class="ilist" id="i-ll"></div></div>
+      <div class="card">
+        <div class="ctitle"><div class="cico">&#127942;</div>Top 5 Highest-Loss Lines (All Voltages)</div>
+        <div class="ch"><canvas id="c-ll-5"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle"><div class="cico">&#128203;</div>Line Loss Detail Table</div>
+        <div class="tscr" id="llt"></div>
+      </div>
+      <div class="ins-box">
+        <div class="ins-hd">&#128161; Line Loss Insights</div>
+        <div class="ilist" id="i-ll"></div>
+      </div>
     </div>
-    <!-- BUS -->
     <div class="panel" id="p-bus">
       <div class="g2">
         <div class="card"><div class="ctitle"><div class="cico">🔌</div>Bus Loss by Substation &amp; Voltage</div><div class="ch"><canvas id="c-bus-g"></canvas></div></div>
@@ -605,19 +622,21 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
   </div>
 </div>
 
-<footer class="footer">
-  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 24px;background:var(--n0,#06101e)">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center">
-      <span style="color:#f5c354;font-family:var(--fh,'Syne',sans-serif);font-size:12.5px;font-weight:700;letter-spacing:.5px">&#169; Thinley Norbu</span>
-      <span style="color:rgba(255,255,255,.4)">|</span>
-      <span style="color:#fff;font-size:12px;font-weight:500">TOMS Semtokha</span>
-      <span style="color:rgba(255,255,255,.4)">|</span>
-      <span style="color:#e2e8f0;font-size:11.5px">&#128222; 17268194</span>
-      <span style="color:rgba(255,255,255,.4)">|</span>
-      <span style="color:#e2e8f0;font-size:11.5px">&#9993; thinleynorbu23@bpc.bt</span>
+<footer class="footer" style="background:linear-gradient(110deg,#06101e,#0d1f35);border-top:1px solid rgba(255,255,255,.07);padding:0">
+  <div style="max-width:1480px;margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <span style="color:#f5c354;font-family:'Syne',sans-serif;font-size:12.5px;font-weight:700">&#169; Thinley Norbu</span>
+      <span style="color:rgba(255,255,255,.2)">&#124;</span>
+      <span style="color:rgba(255,255,255,.7);font-size:12px;font-weight:500">TOMS Semtokha</span>
+      <span style="color:rgba(255,255,255,.2)">&#124;</span>
+      <span style="color:rgba(255,255,255,.5);font-size:11.5px">&#128222;&nbsp;17268194</span>
+      <span style="color:rgba(255,255,255,.2)">&#124;</span>
+      <span style="color:rgba(255,255,255,.5);font-size:11.5px">&#9993;&nbsp;thinleynorbu23@bpc.bt</span>
     </div>
-    <div style="color:rgba(255,255,255,.45);font-size:10px;font-family:var(--fm,'DM Mono',monospace);margin-top:2px">
-      Dashboard v7.0 &middot; <span id="ftrSync">Checking connection&hellip;</span>
+    <div style="color:rgba(255,255,255,.3);font-size:10.5px;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:8px">
+      <span>Dashboard v7.0</span>
+      <span style="color:rgba(255,255,255,.15)">&#183;</span>
+      <span id="ftrSync">Checking connection&hellip;</span>
     </div>
   </div>
 </footer>
@@ -1112,7 +1131,56 @@ function renderAll(){if(!S.year||!S.db[S.year])return;renderOV();renderLL();rend
 
 function renderOV(){const mi=MI(),ll=D('line'),bl=D('bus'),msl=D('msl'),tx=D('tx'),fw=D('fwpl'),en=D('energy');const aLL=aAvg(ll,mi),aBL=aAvg(bl,mi),aMSL=aAvg(msl,mi),aTX=aAvg(tx,mi);let peak=0;fw.forEach(r=>{const v=Math.max(...mi.map(m=>r.maxMW?.[m]||0));if(v>peak)peak=v;});let totExp=0;en.filter(r=>r.type==='Export').forEach(r=>mi.forEach(m=>{const v=r.months?.[m];if(v&&!isNaN(v))totExp+=v;}));document.getElementById('kgrid').innerHTML=[{l:'Avg Transmission Line Loss',v:aLL,i:'⚡',d:aLL!==null?(aLL*100).toFixed(2):null,u:'%'},{l:'Avg Bus Loss',v:aBL,i:'🔌',d:aBL!==null?(aBL*100).toFixed(2):null,u:'%'},{l:'Avg Monthly System Loss',v:aMSL,i:'📏',d:aMSL!==null?(aMSL*100).toFixed(2):null,u:'%'},{l:'Avg Transformer Loss',v:aTX,i:'🔧',d:aTX!==null?(aTX*100).toFixed(2):null,u:'%'},{l:'System Peak Load',v:null,i:'📈',d:peak.toFixed(1),u:' MW',cls:'k-n'},{l:'Total Energy Export',v:null,i:'🏭',d:totExp>=1e6?(totExp/1e6).toFixed(2)+'M':totExp.toLocaleString(),u:' kWh',cls:'k-t'}].map(({l,v,i,d,u,cls})=>`<div class="kpi ${cls||kCls(v)}"><div class="kbg">${i}</div><div class="klbl">${l}</div><div class="kval">${d??'—'}<sup>${u}</sup></div><div class="kfoot">${mi.length} month${mi.length!==1?'s':''} · ${S.year}</div></div>`).join('');mkC('c-ov-s','bar',{labels:mi.map(i=>MOS[i]),datasets:[{label:'Line Loss %',data:mi.map(m=>Math.abs(mAvg(ll,m)||0)*100),backgroundColor:'#1565c0bb',borderRadius:2},{label:'Bus Loss %',data:mi.map(m=>Math.abs(mAvg(bl,m)||0)*100),backgroundColor:'#e9a826bb',borderRadius:2},{label:'Monthly System Loss %',data:mi.map(m=>Math.abs(mAvg(msl,m)||0)*100),backgroundColor:'#2ecc8fbb',borderRadius:2},{label:'Transformer %',data:mi.map(m=>Math.abs(mAvg(tx,m)||0)*100),backgroundColor:'#ef4444bb',borderRadius:2}]},{plugins:{legend:{labels:{font:{family:'DM Sans',size:11}}}},scales:{x:{...XS(),stacked:true},y:{...YP(),stacked:true}}});mkC('c-ov-d','doughnut',{labels:['Line Loss','Bus Loss','Monthly System Loss','Transformer'],datasets:[{data:[Math.abs(aLL||0)*100,Math.abs(aBL||0)*100,Math.abs(aMSL||0)*100,Math.abs(aTX||0)*100],backgroundColor:['#1565c0','#e9a826','#2ecc8f','#ef4444'],borderWidth:2,hoverOffset:6}]},{plugins:{legend:{position:'bottom',labels:{padding:14}},tooltip:{callbacks:{label:c=>`${c.label}: ${c.raw.toFixed(3)}%`}}}});let hm=`<table class="hmt"><thead><tr><th>Substation</th>${mi.map(m=>`<th>${MOS[m]}</th>`).join('')}<th>Average</th></tr></thead><tbody>`;for(const r of msl){const avg=rAvg(r,mi);hm+=`<tr><td class="hml">${r.name}</td>${mi.map(m=>{const v=r.months?.[m];return`<td style="background:${hbg(v)};color:${hfg(v)}">${v!==null?fp(v):'—'}</td>`;}).join('')}<td style="background:${hbg(avg)};color:${hfg(avg)};font-weight:700">${fp(avg)}</td></tr>`;}hm+=`</tbody></table>`;document.getElementById('hmw').innerHTML=hm;buildIns([...ll,...bl,...msl,...tx],mi,'i-ov');}
 
-function renderLL(){const mi=MI(),rows=D('line');mkC('c-ll-m','line',{labels:mi.map(i=>MOS[i]),datasets:rows.map((r,i)=>({label:r.name.length>28?r.name.slice(0,28)+'…':r.name,data:mi.map(m=>r.months?.[m]!==null?r.months[m]*100:null),borderColor:PAL[i%PAL.length],backgroundColor:'transparent',pointRadius:4,pointHoverRadius:7,borderWidth:2,tension:.32,spanGaps:true}))},{plugins:{legend:{labels:{font:{family:'DM Sans',size:9},boxWidth:10,padding:8}}},scales:{x:XS(),y:YP()}});const r5=[...rows].map(r=>({...r,avg:rAvg(r,mi)||0})).sort((a,b)=>Math.abs(b.avg)-Math.abs(a.avg)).slice(0,5);mkC('c-ll-5','bar',{labels:r5.map(r=>r.name.length>22?r.name.slice(0,22)+'…':r.name),datasets:[{label:'Average Loss %',data:r5.map(r=>r.avg*100),backgroundColor:r5.map(r=>r.avg<0?'#bfdbfe':r.avg*100<1?'#bbf7d0':r.avg*100<3?'#fef9c3':'#fecaca'),borderRadius:5}]},{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{...XS(),ticks:{callback:v=>v.toFixed(2)+'%',font:{family:'DM Mono',size:10}}},y:{ticks:{font:{family:'DM Sans',size:10}}}}});let th=`<table class="dt"><thead><tr><th>Line Section</th><th>Voltage</th>`;mi.forEach(m=>th+=`<th>${MOS[m]}</th>`);th+=`<th>Annual Avg</th><th>Trend</th></tr></thead><tbody>`;for(const r of rows){const avg=rAvg(r,mi);const anom=mi.some(m=>(r.months?.[m]||0)<0)||(avg!==null&&avg*100>3);th+=`<tr class="${anom?'ranom':''}"><td class="tdn">${r.name}</td><td>${r.voltage}</td>${mi.map(m=>{const v=r.months?.[m];return`<td style="background:${hbg(v)};color:${hfg(v)}">${v!==null?fp(v):'—'}${v!==null&&v<0?' ⚠':''}</td>`;}).join('')}<td style="background:${hbg(avg)};color:${hfg(avg)};font-weight:700">${fp(avg)}</td><td>${tArr(r,mi)}</td></tr>`;}th+=`</tbody></table>`;mkTable('llt',th);buildIns(rows,mi,'i-ll');}
+function renderLL(){
+  const mi=MI(),rows=D('line');
+  const r220=rows.filter(r=>r.voltage&&r.voltage.includes('220'));
+  const r66=rows.filter(r=>!r.voltage||!r.voltage.includes('220'));
+  const chartOpts={
+    plugins:{legend:{labels:{font:{family:'DM Sans',size:9},boxWidth:9,padding:6}}},
+    scales:{
+      x:{grid:{display:false},ticks:{font:{family:'DM Sans',size:11}}},
+      y:{ticks:{callback:v=>v.toFixed(2)+'%',font:{family:'DM Mono',size:10}},
+         title:{display:true,text:'Loss %',font:{family:'DM Sans',size:11}}}
+    }
+  };
+  function mkDS(arr){
+    return arr.map((r,i)=>({
+      label:r.name.length>26?r.name.slice(0,26)+'…':r.name,
+      data:mi.map(m=>r.months?.[m]!==null&&r.months?.[m]!==undefined?r.months[m]*100:null),
+      borderColor:PAL[i%PAL.length],backgroundColor:'transparent',
+      pointRadius:3,borderWidth:2,tension:.32,spanGaps:true
+    }));
+  }
+  if(document.getElementById('c-ll-220')){
+    mkC('c-ll-220','line',{labels:mi.map(i=>MOS[i]),datasets:mkDS(r220)},chartOpts);
+  }
+  if(document.getElementById('c-ll-66')){
+    mkC('c-ll-66','line',{labels:mi.map(i=>MOS[i]),datasets:mkDS(r66)},chartOpts);
+  }
+  const r5=rows.slice().map(r=>({...r,avg:rAvg(r,mi)||0}))
+    .sort((a,b)=>Math.abs(b.avg)-Math.abs(a.avg)).slice(0,5);
+  mkC('c-ll-5','bar',{
+    labels:r5.map(r=>r.name.length>20?r.name.slice(0,20)+'…':r.name),
+    datasets:[{label:'Avg Loss %',data:r5.map(r=>r.avg*100),
+      backgroundColor:r5.map(r=>r.avg<0?'#bfdbfe':r.avg*100<1?'#bbf7d0':r.avg*100<3?'#fef9c3':'#fecaca'),
+      borderRadius:5}]
+  },{indexAxis:'y',plugins:{legend:{display:false}},
+    scales:{x:{ticks:{callback:v=>v.toFixed(2)+'%',font:{family:'DM Mono',size:10}}},
+            y:{ticks:{font:{family:'DM Sans',size:10}}}}});
+  let th='<table class="dt"><thead><tr><th>Line Section</th><th>Voltage</th>';
+  mi.forEach(m=>{th+=`<th>${MOS[m]}</th>`;});
+  th+='<th>Avg</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const avg=rAvg(r,mi);
+    th+=`<tr class="${avg!==null&&avg*100>3?'ranom':''}">
+      <td class="tdn">${r.name}</td><td>${r.voltage}</td>`;
+    mi.forEach(m=>{const v=r.months?.[m]??null;
+      th+=`<td style="background:${hbg(v)};color:${hfg(v)}">${fp(v)}</td>`;});
+    th+=`<td style="background:${hbg(avg)};color:${hfg(avg)};font-weight:700">${fp(avg)}</td></tr>`;
+  });
+  th+='</tbody></table>';
+  mkTable('llt',th);buildIns(rows,mi,'i-ll');
+}
 
 function renderBus(){const mi=MI(),rows=D('bus');const subs=[...new Set(rows.map(r=>r.name))],volts=[...new Set(rows.map(r=>r.voltage).filter(Boolean))];mkC('c-bus-g','bar',{labels:subs.map(s=>s.length>14?s.slice(0,14)+'…':s),datasets:volts.map((v,i)=>({label:v,data:subs.map(s=>{const r=rows.find(x=>x.name===s&&x.voltage===v);return r?Math.abs(rAvg(r,mi)||0)*100:0;}),backgroundColor:PAL[i%PAL.length]+'cc',borderRadius:3}))},{plugins:{legend:{labels:{font:{family:'DM Sans',size:11}}}},scales:{x:XS(),y:YP()}});mkC('c-bus-r','radar',{labels:SUBS,datasets:[{label:`Avg Bus Loss (${S.year})`,data:SUBS.map(s=>{const rs=rows.filter(r=>r.name?.toLowerCase().includes(s.toLowerCase()));return rs.length?Math.abs(aAvg(rs,mi)||0)*100:0;}),borderColor:'#1565c0',backgroundColor:'rgba(21,101,192,.1)',pointBackgroundColor:'#1565c0',pointRadius:4,borderWidth:2}]},{plugins:{legend:{display:false}},scales:{r:{ticks:{callback:v=>v.toFixed(1)+'%',font:{family:'DM Mono',size:9}}}}});let th=`<table class="dt"><thead><tr><th>Substation</th><th>Voltage</th>`;mi.forEach(m=>th+=`<th>${MOS[m]}</th>`);th+=`<th>Average</th></tr></thead><tbody>`;for(const r of rows){const avg=rAvg(r,mi);th+=`<tr><td class="tdn">${r.name}</td><td>${r.voltage}</td>${mi.map(m=>{const v=r.months?.[m];return`<td style="background:${hbg(v)};color:${hfg(v)}">${v!==null?fp(v):'—'}</td>`;}).join('')}<td style="background:${hbg(avg)};color:${hfg(avg)};font-weight:700">${fp(avg)}</td></tr>`;}th+=`</tbody></table>`;mkTable('bust',th);buildIns(rows,mi,'i-bus');}
 
