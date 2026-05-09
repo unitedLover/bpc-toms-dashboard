@@ -350,16 +350,11 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
 <!-- MERGE MODAL -->
 <div class="mbg" id="modal">
   <div class="mbox">
-    <h3 id="mt">Confirm Merge</h3>
-    <p id="mb"></p>
-    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12px;color:#856404">
-      <strong>&#9888; Important:</strong> If you added, renamed or deleted feeders/rows in Excel, 
-      click <strong>"Overwrite All"</strong>. Otherwise new feeder names will not appear.
-    </div>
+    <h3 id="mt">Confirm Merge</h3><p id="mb"></p>
     <div class="mdiff" id="md" style="display:none"></div>
     <div class="macts">
       <button class="mcancel" onclick="closeModal(false)">Keep Existing (add new months only)</button>
-      <button class="mok" onclick="closeModal(true)" style="background:#dc2626">&#9888; Overwrite All (replace everything &amp; feeder names)</button>
+      <button class="mok" onclick="closeModal(true)">Overwrite All (replace everything)</button>
     </div>
   </div>
 </div>
@@ -979,37 +974,17 @@ function handleFileUpload(input) {
   input.value = '';
 }
 function parseXL(buf,fname){
-  const wb=XLSX.read(buf,{type:'array'});
-  const yr=detectYear(wb);
-  if(!yr){toast('Cannot detect year from file. Make sure the year appears in row 1.','e');return;}
-  const fresh={
-    line:pLine(wb),bus:pBus(wb),msl:pMSL(wb),
-    tx:pTX(wb),fwpl:pFWPL(wb),energy:pEnergy(wb)
-  };
-  const nm=moDetect(fresh);
-  const em=S.db[yr]?moDetect(S.db[yr]):[];
-  const ov=em.filter(m=>nm.includes(m));
-  
-  if(S.db[yr]&&ov.length>0){
-    // Check if feeder names changed
-    const oldFeeders=(S.db[yr].fwpl||[]).map(r=>r.name).sort().join(',');
-    const newFeeders=(fresh.fwpl||[]).map(r=>r.name).sort().join(',');
-    const feedersChanged = oldFeeders !== newFeeders;
-    
-    document.getElementById('mt').textContent='Merge Data for '+yr+'?';
-    document.getElementById('mb').textContent=
-      'Year '+yr+' already has: '+ov.map(m=>MOS[m]).join(', ')+
-      '. New file: '+nm.map(m=>MOS[m]).join(', ')+'.'+
-      (feedersChanged?' ⚠ Feeder names have changed.':'');
-    const nd=document.getElementById('md');
-    nd.style.display='block';
-    nd.textContent='New months: '+(nm.filter(m=>!em.includes(m)).map(m=>MOS[m]).join(', ')||'None')+
-      (feedersChanged?' | Feeder changes detected — use Overwrite All':'');
-    document.getElementById('modal').classList.add('open');
-    S.mcb=ok=>{doMerge(yr,fresh,ok);finalize(yr,nm,fname);};
-  }else{
-    doMerge(yr,fresh,true);
+  try{
+    const wb=XLSX.read(buf,{type:'array'});
+    const yr=detectYear(wb);
+    if(!yr){toast('Cannot detect year — make sure year appears in row 1','e');return;}
+    // Always fully replace with fresh Excel data
+    S.db[yr]={line:pLine(wb),bus:pBus(wb),msl:pMSL(wb),tx:pTX(wb),fwpl:pFWPL(wb),energy:pEnergy(wb)};
+    const nm=moDetect(S.db[yr]);
     finalize(yr,nm,fname);
+  }catch(err){
+    toast('Upload failed: '+err.message,'e');
+    console.error(err);
   }
 }
 function closeModal(ok){document.getElementById('modal').classList.remove('open');document.getElementById('md').style.display='none';if(S.mcb){S.mcb(ok);S.mcb=null;}}
@@ -1042,13 +1017,16 @@ function doMerge(yr,fresh,ow){
 }
 async function finalize(yr,nm,fname){
   localSave();
-  const saved=await cloudSave(`bpc_toms/data/${yr}`,JSON.stringify(S.db[yr]));
-  await logChange('upload',`Uploaded ${fname||'Excel'} for ${yr} — ${nm.length} months (${nm.map(m=>MOS[m]).join(', ')})`);
+  const saved=await cloudSave('bpc_toms/data/'+yr, JSON.stringify(S.db[yr]));
+  await logChange('upload','Uploaded '+(fname||'Excel')+' for '+yr+' — '+nm.length+' months');
   S.year=yr;
-  const moNames=nm.map(m=>MOS[m]).join(', ');
-  toast(saved?`✓ ${yr} uploaded — ${nm.length} months (${moNames}) synced to cloud`:`✓ ${yr} uploaded — ${nm.length} months (${moNames}) saved`,saved?'ok':'tok');
-  rebuildUI();document.getElementById('yrSel').value=yr;setYear(yr);
-  if(S.editMode)depPopulateYear();
+  toast((saved?'☁ ':'✓ ')+yr+': '+nm.length+' months loaded'+(saved?' & synced':''), saved?'ok':'tok');
+  buildYrDD();
+  buildYcards();
+  updateStats();
+  document.getElementById('yrSel').value=yr;
+  setYear(yr);
+  setTimeout(updateDeleteControls, 300);
 }
 
 /* ── Parsers ── */
@@ -1336,11 +1314,10 @@ async function deleteMonth(yr, mo) {
 }
 
 /* Show/hide delete controls based on admin state */
-function updateDeleteControls() {
-  const show = S.isAdmin;
-  const delYearBtn = document.getElementById('delYearBtn');
-  if (delYearBtn) delYearBtn.classList.toggle('adm-show', show);
-  document.querySelectorAll('.mc-del').forEach(btn => btn.classList.toggle('adm-show', show));
+function updateDeleteControls(){
+  const btn=document.getElementById('delYearBtn');
+  if(btn) btn.style.display=(S.isAdmin&&S.year)?'inline-block':'none';
+  document.querySelectorAll('.mc-del').forEach(b=>b.style.display=S.isAdmin?'inline-flex':'none');
 }
 
 /* ══ TOAST ══ */
