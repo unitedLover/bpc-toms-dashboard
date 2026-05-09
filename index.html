@@ -353,8 +353,8 @@ body { font-family:var(--fb); background:var(--bg); color:var(--text); min-heigh
     <h3 id="mt">Confirm Merge</h3><p id="mb"></p>
     <div class="mdiff" id="md" style="display:none"></div>
     <div class="macts">
-      <button class="mcancel" onclick="closeModal(false)">Keep Existing (add new months only)</button>
-      <button class="mok" onclick="closeModal(true)">Overwrite All (replace everything)</button>
+      <button class="mcancel" onclick="closeModal(false)">Cancel</button>
+      <button class="mok" onclick="closeModal(true)">Confirm - Apply Changes</button>
     </div>
   </div>
 </div>
@@ -975,19 +975,59 @@ function handleFileUpload(input) {
 }
 function parseXL(buf,fname){
   try{
-    const wb=XLSX.read(buf,{type:'array'});
-    const yr=detectYear(wb);
-    if(!yr){toast('Cannot detect year — make sure year appears in row 1','e');return;}
-    // Always fully replace with fresh Excel data
-    S.db[yr]={line:pLine(wb),bus:pBus(wb),msl:pMSL(wb),tx:pTX(wb),fwpl:pFWPL(wb),energy:pEnergy(wb)};
-    const nm=moDetect(S.db[yr]);
-    finalize(yr,nm,fname);
-  }catch(err){
-    toast('Upload failed: '+err.message,'e');
-    console.error(err);
-  }
+    var wb=XLSX.read(buf,{type:'array'});
+    var yr=detectYear(wb);
+    if(!yr){toast('Cannot detect year','e');return;}
+    var fresh={line:pLine(wb),bus:pBus(wb),msl:pMSL(wb),tx:pTX(wb),fwpl:pFWPL(wb),energy:pEnergy(wb)};
+    var nm=moDetect(fresh);
+    if(!S.db[yr]){S.db[yr]=fresh;finalize(yr,nm,fname);return;}
+    var changes=[];
+    var em=moDetect(S.db[yr]);
+    var newMo=nm.filter(function(m){return em.indexOf(m)<0;});
+    var remMo=em.filter(function(m){return nm.indexOf(m)<0;});
+    var oldFC=(S.db[yr].fwpl||[]).length;
+    var newFC=(fresh.fwpl||[]).length;
+    var feedersChanged=(S.db[yr].fwpl||[]).map(function(r){return r.name;}).sort().join('|')!==(fresh.fwpl||[]).map(function(r){return r.name;}).sort().join('|');
+    var linesChanged=(S.db[yr].line||[]).map(function(r){return r.name;}).sort().join('|')!==(fresh.line||[]).map(function(r){return r.name;}).sort().join('|');
+    var txChanged=(S.db[yr].tx||[]).map(function(r){return r.transformer;}).sort().join('|')!==(fresh.tx||[]).map(function(r){return r.transformer;}).sort().join('|');
+    var valChanged=false;
+    nm.filter(function(m){return em.indexOf(m)>=0;}).forEach(function(m){
+      ['line','bus','msl','tx','energy'].forEach(function(sh){
+        var ex=S.db[yr][sh]||[],inc=fresh[sh]||[];
+        if(ex.length!==inc.length){valChanged=true;return;}
+        inc.forEach(function(nr,i){
+          if(!ex[i])return;
+          var nv=(nr.months||nr.maxMW||[])[m];
+          var ov2=(ex[i].months||ex[i].maxMW||[])[m];
+          if(nv!==ov2&&nv!==null&&nv!==undefined)valChanged=true;
+        });
+      });
+    });
+    if(newMo.length>0)changes.push('New months: '+newMo.map(function(m){return MOS[m];}).join(', '));
+    if(remMo.length>0)changes.push('Months removed: '+remMo.map(function(m){return MOS[m];}).join(', '));
+    if(feedersChanged)changes.push('Feeder names changed ('+oldFC+' to '+newFC+' feeders)');
+    if(linesChanged)changes.push('Line section names changed');
+    if(txChanged)changes.push('Transformer names changed');
+    if(valChanged)changes.push('Data values updated in existing months');
+    if(!changes.length)changes.push('No changes detected');
+    var html='<div style="margin-bottom:10px;font-size:12px;color:var(--muted)">Changes found in your Excel:</div>';
+    html+='<ul style="margin:0 0 12px 0;padding:0 0 0 18px;font-size:12.5px;line-height:2">';
+    changes.forEach(function(c){html+='<li>'+c+'</li>';});
+    html+='</ul>';
+    html+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:11.5px;color:#14532d">';
+    html+='Click Confirm to apply all changes from your Excel.</div>';
+    document.getElementById('mt').textContent='Changes Detected - '+yr;
+    document.getElementById('mb').innerHTML=html;
+    document.getElementById('md').style.display='none';
+    document.getElementById('modal').classList.add('open');
+    S.mcb=function(ok){if(ok){S.db[yr]=fresh;finalize(yr,nm,fname);}else{toast('Upload cancelled','');}}
+  }catch(err){console.error(err);toast('Upload failed: '+err.message,'e');}
 }
-function closeModal(ok){document.getElementById('modal').classList.remove('open');document.getElementById('md').style.display='none';if(S.mcb){S.mcb(ok);S.mcb=null;}}
+function closeModal(ok){
+  document.getElementById('modal').classList.remove('open');
+  document.getElementById('md').style.display='none';
+  if(S.mcb){var cb=S.mcb;S.mcb=null;cb(ok);}
+}
 function doMerge(yr,fresh,ow){
   if(!S.db[yr]){S.db[yr]=fresh;return;}
   if(ow){
@@ -1017,16 +1057,13 @@ function doMerge(yr,fresh,ow){
 }
 async function finalize(yr,nm,fname){
   localSave();
-  const saved=await cloudSave('bpc_toms/data/'+yr, JSON.stringify(S.db[yr]));
-  await logChange('upload','Uploaded '+(fname||'Excel')+' for '+yr+' — '+nm.length+' months');
+  const saved=await cloudSave(`bpc_toms/data/${yr}`,JSON.stringify(S.db[yr]));
+  await logChange('upload',`Uploaded ${fname||'Excel'} for ${yr} — ${nm.length} months (${nm.map(m=>MOS[m]).join(', ')})`);
   S.year=yr;
-  toast((saved?'☁ ':'✓ ')+yr+': '+nm.length+' months loaded'+(saved?' & synced':''), saved?'ok':'tok');
-  buildYrDD();
-  buildYcards();
-  updateStats();
-  document.getElementById('yrSel').value=yr;
-  setYear(yr);
-  setTimeout(updateDeleteControls, 300);
+  const moNames=nm.map(m=>MOS[m]).join(', ');
+  toast(saved?`✓ ${yr} uploaded — ${nm.length} months (${moNames}) synced to cloud`:`✓ ${yr} uploaded — ${nm.length} months (${moNames}) saved`,saved?'ok':'tok');
+  rebuildUI();document.getElementById('yrSel').value=yr;setYear(yr);
+  if(S.editMode)depPopulateYear();
 }
 
 /* ── Parsers ── */
@@ -1061,7 +1098,21 @@ function detectYear(wb){
 function pLine(wb){const ws=wb.Sheets['Line losses'];if(!ws)return[];const rows=[];for(let r=4;r<=25;r++){if(typeof ws[XLSX.utils.encode_cell({r,c:0})]?.v!=='number')continue;const name=cs(ws,r,1);if(!name)continue;rows.push({name,voltage:cs(ws,r,2),months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
 function pBus(wb){const ws=wb.Sheets['bus loss'];if(!ws)return[];const rows=[];let sub='';for(let r=3;r<=36;r++){const sn=cs(ws,r,1);if(sn&&SUBS.some(s=>sn.toLowerCase().includes(s.toLowerCase())))sub=sn;const vt=cs(ws,r,2);if(!vt)continue;rows.push({name:sub||sn,voltage:vt,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
 function pMSL(wb){const ws=wb.Sheets['MSL'];if(!ws)return[];const rows=[];const sm={A:'Olakha',B:'Paro',C:'Jemina',D:'Dechencholing',E:'Haa',F:'Semtokha',G:'Pangbesa',H:'Changidaphu',I:'Dochula',J:'Jamjee'};for(let r=5;r<=20;r++){const raw=cs(ws,r,0);if(!raw)continue;const sub=SUBS.find(s=>raw.includes(s))||(raw.match(/\(([A-J])\)/)?sm[raw.match(/\(([A-J])\)/)[1]]:'');if(!sub)continue;rows.push({name:sub,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
-function pTX(wb){const ws=wb.Sheets['Transformer loss'];if(!ws)return[];const rows=[];let sub='';for(let r=5;r<=50;r++){const sn=cs(ws,r,0);if(sn&&SUBS.some(s=>sn.includes(s)))sub=sn;const tx=cs(ws,r,2);if(!tx)continue;rows.push({name:sub||sn,voltage:cs(ws,r,1),transformer:tx,months:Array.from({length:12},(_,m)=>cv(ws,r,3+m))});}return rows;}
+function pTX(wb){
+  var ws=wb.Sheets['Transformer loss'];if(!ws)return[];
+  var rows=[];var sub='';var volt='';
+  for(var r=4;r<=60;r++){
+    var sn=cs(ws,r,0),vt=cs(ws,r,1),tx=cs(ws,r,2);
+    if(sn&&sn!=='Substation'&&sn!=='Name of the substations'&&
+       SUBS.some(function(s){return sn.toLowerCase().indexOf(s.toLowerCase())>=0;}))sub=sn;
+    if(vt&&vt!=='Voltage'&&vt!=='Voltage level ')volt=vt;
+    if(!tx||tx==='Transformer'||tx==='Transformer ')continue;
+    var months=Array.from({length:12},function(_,m){return cv(ws,r,3+m);});
+    if(!months.some(function(v){return v!==null;}))continue;
+    rows.push({name:sub,voltage:volt,transformer:tx,months:months});
+  }
+  return rows;
+}
 function pFWPL(wb){
   const ws=wb.Sheets['FWPL'];if(!ws)return[];
   const rows=[];let sub='';
@@ -1314,10 +1365,11 @@ async function deleteMonth(yr, mo) {
 }
 
 /* Show/hide delete controls based on admin state */
-function updateDeleteControls(){
-  const btn=document.getElementById('delYearBtn');
-  if(btn) btn.style.display=(S.isAdmin&&S.year)?'inline-block':'none';
-  document.querySelectorAll('.mc-del').forEach(b=>b.style.display=S.isAdmin?'inline-flex':'none');
+function updateDeleteControls() {
+  const show = S.isAdmin;
+  const delYearBtn = document.getElementById('delYearBtn');
+  if (delYearBtn) delYearBtn.classList.toggle('adm-show', show);
+  document.querySelectorAll('.mc-del').forEach(btn => btn.classList.toggle('adm-show', show));
 }
 
 /* ══ TOAST ══ */
